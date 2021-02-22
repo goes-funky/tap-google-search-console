@@ -1,4 +1,5 @@
 import json
+import time
 from datetime import datetime, timedelta
 from urllib.parse import quote
 import singer
@@ -6,6 +7,7 @@ from singer import metrics, metadata, Transformer, utils
 from singer.utils import strptime_to_utc, strftime
 from tap_google_search_console.transform import transform_json
 from tap_google_search_console.streams import STREAMS
+from tap_google_search_console.client import GoogleError
 
 LOGGER = singer.get_logger()
 BASE_URL = 'https://www.googleapis.com/webmasters/v3'
@@ -186,17 +188,27 @@ def sync_endpoint(client, #pylint: disable=too-many-branches
 
         # API request data, endpoint = stream_name passed to client for metrics logging
         data = {}
-        if api_method == 'GET':
-            data = client.get(
-                path=path,
-                params=querystring,
-                endpoint=stream_name)
-        elif api_method == 'POST':
-            data = client.post(
-                path=path,
-                params=querystring,
-                endpoint=stream_name,
-                data=json.dumps(body))
+        fetch_state = "running"
+        wait_time = 4
+
+        while fetch_state != "success":
+            try:
+                if api_method == 'GET':
+                    data = client.get(
+                        path=path,
+                        params=querystring,
+                        endpoint=stream_name)
+                elif api_method == 'POST':
+                    data = client.post(
+                        path=path,
+                        params=querystring,
+                        endpoint=stream_name,
+                        data=json.dumps(body))
+                fetch_state = "success"
+            except GoogleError as err:
+                LOGGER.info('API quota exceeded, waiting... ' + str(wait_time) + ' seconds')
+                time.sleep(wait_time)
+                wait_time *= 2
 
         # time_extracted: datetime when the data was extracted from the API
         time_extracted = utils.now()
