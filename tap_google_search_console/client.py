@@ -119,7 +119,10 @@ def raise_for_error(response):
             if ('error' in response) or ('errorCode' in response):
                 message = '%s: %s' % (response.get('error', str(error)),
                                       response.get('message', 'Unknown Error'))
-                error_code = response.get('error', {}).get('code')
+                error_dict = response.get("error")
+                error_code = None
+                if isinstance(error_dict, dict):
+                    error_code = response.get('error', {}).get('code')
                 ex = get_exception_for_error_code(error_code)
                 raise ex(message)
             else:
